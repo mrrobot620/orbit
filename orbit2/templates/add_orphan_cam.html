@@ -21,7 +21,6 @@
                             <img id="selectedImage" src="https://mdbootstrap.com/img/Photos/Others/placeholder.jpg"
                                  alt="example placeholder" style="width: 300px;" />
                         </div>
-
                         <div class="mb-3">
                             <label for="image" class="form-label">Select Image:</label>
                             <input type="file" class="form-control" name="image" accept="image/*" onchange="displaySelectedImage(event, 'selectedImage')" required>
@@ -39,13 +38,13 @@
                     <form id="outputForm">
                         <div id="result" style="display: none;">
                             <h1 class="mb-3">Result: </h1>
-                            <h3 class="mb-3">Orphan ID: <span id="orphanIdPlaceholder">Here orphan_id</span> </h3>
                             <h3 class="mb-3">Object Cateogry</h3>
                             <div class="form-group mb-3">
                                 <input type="text" class="form-control" id="classificationResult" placeholder="Classification result" contenteditable="true">
                             </div>
+
                             <h3 class="mb-3">Dominant Colors:</h3>
-                            <div id="dominantColors" class="mb-3">f ik   \][PO  K INU]
+                            <div id="dominantColors" class="mb-3">
                                 <!-- Color squares will be dynamically added here -->
                             </div>
 
@@ -108,9 +107,6 @@
             // Display Uploaded Image
             var uploadedImage = document.getElementById('selectedImage');
             uploadedImage.src = URL.createObjectURL(form.elements.image.files[0]);
-
-            document.getElementById('orphanIdPlaceholder').innerText = data.orphan_id;
-
         })
         .catch(error => console.error('Error:', error));
     }
@@ -129,5 +125,16 @@
             reader.readAsDataURL(fileInput.files[0]);
         }
     }
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function (stream) {
+            const liveCamera = document.getElementById('liveCamera');
+            liveCamera.srcObject = stream;
+        })
+        .catch(function (err) {
+            console.error('Error accessing camera:', err);
+        });
+
+    
 </script>
 {% endblock %}

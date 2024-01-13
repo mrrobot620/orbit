@@ -32,7 +32,7 @@ import numpy as np
 from PIL import Image
 from sklearn.cluster import KMeans
 import pytesseract
-
+import random
 
 
 def login(request):
@@ -50,8 +50,7 @@ def login(request):
 
 
 def home(request):
-    if request.method == "POST":
-        return render(request , 'home.html')
+    return render(request , 'home.html')
     
 
 def add_orphan_page(request):
@@ -99,6 +98,9 @@ def classify_image(request):
 
         text = pytesseract.image_to_string(img)
 
+        random_number = random.randint(10000000, 99999999)
+        orphan_id = f"OID{random_number}"
+
         print(f"Text:  {text}")
 
         # Convert np.int64 to regular int for serialization
@@ -108,6 +110,7 @@ def classify_image(request):
             'classification_result': classification_result,
             'dominant_colors': dominant_colors,
             "extracted_text": text,
+            "orphan_id": orphan_id
         }
         return JsonResponse(result, encoder=DjangoJSONEncoder)
 
