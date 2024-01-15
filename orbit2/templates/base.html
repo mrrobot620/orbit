@@ -5,7 +5,7 @@
   :root {
     --header-height: 3rem;
     --nav-width: 68px;
-    --first-color: #212529;
+    --first-color: #222831;
     --first-color-light: white;
     --white-color: #f7f6fb;
     --body-font: "Nunito", sans-serif;
@@ -345,7 +345,7 @@
             <i class="bx bx-home nav_logo-icon nav_icon"></i>
             <span class="nav_name">Home</span>
           </a>
-      <a href="" class="nav_link">
+      <a href="{% url 'logout' %}" class="nav_link">
         <i class="bx bx-log-out nav_icon"></i>
         <span class="nav_name">Log Out</span>
       </a>

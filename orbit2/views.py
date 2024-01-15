@@ -33,7 +33,32 @@ from PIL import Image
 from sklearn.cluster import KMeans
 import pytesseract
 import random
+from selenium import webdriver
+import os 
+from select import select
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC3
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+import os
+from idna import valid_contextj
+from datetime import datetime, timedelta
+import logging
+import shutil
+import requests
+from bs4 import BeautifulSoup
+from requests_html import HTMLSession
+import threading
+import re
 
+
+session = HTMLSession()
 
 def login(request):
     if request.method == "POST":
@@ -59,7 +84,6 @@ def add_orphan_page(request):
 inception_model = InceptionV3(weights='imagenet')
 
 def is_white(color, threshold=200):
-    # Check if the color is close to pure white
     return all(value >= threshold for value in color)
 
 def extract_dominant_color(img_array, k=3):
@@ -117,3 +141,7 @@ def classify_image(request):
     return JsonResponse({'error': 'Invalid request'})
 def index(request):
     return render(request, 'add_orphan.html')
+
+def logout_view(request):
+    logout(request)
+    return redirect('login')
