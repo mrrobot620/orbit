@@ -78,7 +78,8 @@
                 </div>
                 <div class="card-body">
                     <p class="card-text"><strong>TID:</strong> {{ result.tid }}</p>
-                    <p class="card-text"><strong>Similarity:</strong> {{ result.similarity }}</p>
+                    <p class="card-text"><strong>PID:</strong> {{ result.pid }}</p>
+                    <p class="card-text"><strong>Similarity:</strong> {{ result.similarity }}%</p>
                 </div>
             </div>
         </div>
@@ -107,6 +108,7 @@
                 </div>
                 <hr>
                 <p><strong>TID:</strong> <span id="modalTID"></span></p>
+                <p><strong>TID:</strong> <span id="modalPID"></span></p>
                 <p><strong>Description:</strong> <span id="modalDescription"></span></p>
                 <p><strong>Color:</strong> <span id="modalColor"></span></p>
                 <p><strong>Brand:</strong> <span id="modalBrand"></span></p>
@@ -132,6 +134,7 @@
                         // Populate modal body with details
                         $('#pendencyImage').attr('src', `${data.image_url}`);
                         $('#modalTID').text(data.tid);
+                        $('#modalPID').text(data.pid);
                         $('#modalDescription').text(data.description);
                         $('#modalColor').text(data.color);
                         $('#modalBrand').text(data.brand);
@@ -163,3 +166,4 @@
 </body>
 
 {% endblock %}
+ 
