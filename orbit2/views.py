@@ -46,6 +46,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC3
 from selenium.webdriver.common.action_chains import ActionChains
+from concurrent.futures import ThreadPoolExecutor
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import time
 import tensorflow as tf
 import os
@@ -78,45 +81,62 @@ model = tf.keras.applications.VGG16(
 
 
 session = HTMLSession()
+retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[500, 502, 503, 504],
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+session.mount("http://", adapter)
+session.mount("https://", adapter)
 
 
 def preprocess_image(img_path):
-    img = cv2.imread(img_path)
-    if img is not None and img.size > 0:
-        img = cv2.resize(img, (224, 224))  # resize the image to (224, 224)
-    img = tf.keras.applications.vgg16.preprocess_input(img)
-    img = np.expand_dims(img, axis=0)  # Add a batch dimension
-    return img
+    try:
+        img = cv2.imread(img_path)
+        if img is not None and np.prod(img.shape).astype(int) > 0:  # Ensure total number of elements is greater than 0
+            img = cv2.resize(img, (224, 224))  # resize the image to (224, 224)
+            img = tf.keras.applications.vgg16.preprocess_input(img)
+            img = np.expand_dims(img, axis=0)  # Add a batch dimension
+            return img
+        else:
+            print(f"Warning: Image not loaded or empty at {img_path}")
+            return None
+    except Exception as e:
+        print(f"Error preprocessing image: {e}")
+        return None
 
 
 def extract_features(img_path):
     img = preprocess_image(img_path)
-    features = model.predict(img)
-    features = np.reshape(features, (7*7*512,))
-    return features
+    if img is None:
+        return None
 
+    try:
+        features = model.predict(img)
+        features = np.reshape(features, (7*7*512,))
+        return features
+    except Exception as e:
+        print(f"Error extracting features: {e}")
+        return None
 
 def cosine_similarity(vec1, vec2):
     dot = np.dot(vec1, vec2)
     norm = np.linalg.norm(vec1) * np.linalg.norm(vec2)
-    sim = dot / norm
+    sim1 = dot / norm
+    sim  = round((sim1 + 1) / 2 * 100 )
     return sim
 
 def find_similar_images(query_img_path, target_img_path, top_k=5):
-    query_features = extract_features_vgg16(query_img_path)
-    target_features = extract_features_vgg16(target_img_path)
+    query_features = extract_features(query_img_path)
+    target_features = extract_features(target_img_path)
+
+    if query_features is None or target_features is None:
+        return None
+
     similarity = cosine_similarity(query_features, target_features)
-
     return similarity
-
-def extract_features_vgg16(img_path):
-    img = preprocess_image(img_path)
-    intermediate_layer_model = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('block5_conv2').output)
-    features = intermediate_layer_model.predict(img)
-    features = np.reshape(features, (features.shape[1]*features.shape[2]*features.shape[3],))
-
-    return features
-
 
 def login_view(request):
     if request.method == "POST":
@@ -152,6 +172,7 @@ def add_pendency(request):
         for thread in threads:
             thread.join()
     return render(request, "pendency.html", {'tids': tids})
+
 
 def is_white(color, threshold=200):
     return all(value >= threshold for value in color)
@@ -197,6 +218,9 @@ def classify_image(request):
 
 def index(request):
     return render(request, 'add_orphan.html')
+
+def profile(request):
+    return render(request , 'profile.html')
 
 def logout_view(request):
     logout(request)
@@ -268,62 +292,78 @@ def download_image(image_url, filename):
 
 
 def download_tracking_page(id):
+    uploaded_ids = []
     regex_pattern = r'\b[A-Z0-9]{16}\b'
     global download_counter
     download_counter = 0
-    response = session.get(f"http://10.24.2.16/fklshipping/shipments/track/?id={id}&ts=1705207057878")
-    a = response.html.html
-    if a is not None:
-        ids = re.findall(regex_pattern, a)
-        pid = ids[-1]
-        try:
-            api = requests.get(f"http://10.83.47.208/v2/product/xif0q/{pid}")
-            raw_api = api.json()
-            images_link = extract_images_info(raw_api)
-            metadata = raw_api.get("metadata" , {})
-            product_attributes1  = metadata.get("productAttributes" , {})
-            vertical = product_attributes1.get("vertical" , "")
-            data = raw_api.get('data', {})
-            product_attributes = data.get('productAttributes', {})
-            attribute_map = product_attributes.get('attributeMap', {})
-            brand_map = attribute_map.get("brand" , {})
-            brand_name  = brand_map.get("value" , "")
-            keys_to_extract = ['description', 'color', 'weight', 'height', 'brand', 'keywords', 'price']
-            result_data = {}
-            for key in keys_to_extract:
-                value = attribute_map.get(key)
-                result_data[key] = value
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        response = session.get(f"http://10.24.2.16/fklshipping/shipments/track/?id={id}&ts=1705207057878")
+        a = response.html.html
+        if a is not None:
+            ids = re.findall(regex_pattern, a)
+            pid = ids[-1]
             try:
-                product = Pendency.objects.create(
-                    description=result_data.get('description', ''),
-                    color=result_data.get('color', ''),
-                    brand=brand_name,
-                    keywords=result_data.get('keywords', ''),
-                    price=result_data.get('price', 0.0),
-                    pid = pid,
-                    tid = id,
-                    vertical = vertical,
-                    image=f"{id}.jpg" 
-                )
-                print(f"Product saved to the database: {product}")
+                api = requests.get(f"http://10.83.47.208/v2/product/xif0q/{pid}")
+                raw_api = api.json()
+                images_link = extract_images_info(raw_api)
+                metadata = raw_api.get("metadata", {})
+                product_attributes1 = metadata.get("productAttributes", {})
+                vertical = product_attributes1.get("vertical", "")
+                data = raw_api.get('data', {})
+                product_attributes = data.get('productAttributes', {})
+                attribute_map = product_attributes.get('attributeMap', {})
+                brand_map = attribute_map.get("brand", {})
+                brand_name = brand_map.get("value", "")
+                keys_to_extract = ['description', 'color', 'weight', 'height', 'brand', 'keywords', 'price']
+                result_data = {}
+                for key in keys_to_extract:
+                    value = attribute_map.get(key)
+                    result_data[key] = value
 
-                if images_link:
-
-                    image_url = images_link[0].get('image_url')
-                    download_image(image_url, f"{id}.jpg")
-                    download_counter += 1
-                    print(f"Tid {download_counter} => {id} => {pid} => {image_url}")
+                # Check if the ID is not already in the uploaded_ids list
+                if id not in uploaded_ids:
+                    try:
+                        existing_product = Pendency.objects.get(tid=id)
+                        print(f"Product with Tid {id} already exists in the database, skipping...")
+                    except Pendency.DoesNotExist:
+                        # The product does not exist, proceed with creating a new one
+                        try:
+                            product = Pendency.objects.create(
+                                description=result_data.get('description', ''),
+                                color=result_data.get('color', ''),
+                                brand=brand_name,
+                                keywords=result_data.get('keywords', ''),
+                                price=result_data.get('price', 0.0),
+                                pid=pid,
+                                tid=id,
+                                vertical=vertical,
+                                image=f"{id}.jpg"
+                            )
+                            uploaded_ids.append(id)  # Add the ID to the list after successful upload
+                            print(f"Product saved to the database: {product}")
+                            if images_link:
+                                image_url = images_link[0].get('image_url')
+                                download_image(image_url, f"{id}.jpg")
+                                download_counter += 1
+                                print(f"Tid {download_counter} => {id} => {pid} => {image_url}")
+                            else:
+                                print(f"No images found for Tid {id}")
+                        except Exception as e:
+                            print(f"Error saving product to the database: {e}")
                 else:
-                    print(f"No images found for Tid {id}")
+                    print(f"ID {id} already uploaded, skipping...")
 
             except Exception as e:
-                print(f"Error saving product to the database: {e}")
-
-        except Exception as e:
-            print(f"Error in running API: {e}")
-    else:
-        print(f"Unable to find Pid for Tid {id}")
-
+                print(f"Error in running API: {e}")
+        else:
+            print(f"Unable to find Pid for Tid {id}")
+        # Retry if not successful and not the last attempt
+        if attempt < max_retries - 1:
+            print(f"Retrying download for Tid {id}, attempt {attempt + 2}")
+        else:
+            print(f"All download attempts failed for Tid {id}")
     
 op.add_experimental_option('prefs' , prefs)
 driver = webdriver.Chrome(options=op)
@@ -341,6 +381,8 @@ def search_view(request):
         brand = request.POST.get('brand')
         uploaded_image = request.FILES.get('image')
         vertical = request.POST.getlist("vertical")
+        keywords = request.POST.getlist("keywords")
+ 
 
         if not (uploaded_image and (brand or vertical)):
             return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'error_message': 'Invalid input'})
@@ -350,8 +392,10 @@ def search_view(request):
             queryset = queryset.filter(vertical__in=vertical)
         if brand:
             queryset = queryset.filter(brand=brand)
-
-        print(f"Vertical: {vertical}, Brand: {brand}")
+       
+        
+            
+        print(f"Vertical: {vertical}, Brand: {brand} , Keywords:  {keywords}")
 
         unique_brands = Pendency.objects.filter(vertical=vertical).values('brand').distinct()
         if uploaded_image:
@@ -361,15 +405,17 @@ def search_view(request):
 
             if not os.path.exists(uploaded_image_path):
                 return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands, 'error_message': 'Uploaded Image File Does Not Exist!'})
-
             try:
                 print(f"Queryset before loop: {queryset}")
                 for pendency in queryset:
                     print(f"Processing pendency: {pendency}")
                     pendency_image_path = pendency.image.path
+                    if not os.path.exists(pendency_image_path):
+                        print(f"Skipping pendency {pendency.tid} due to missing image file.")
+                        continue
                     similarity = find_similar_images(uploaded_image_path, pendency_image_path)
                     print(f"Similarity for TID {pendency.tid}: {similarity}")
-                    results.append({'tid': pendency.tid, 'similarity': similarity, 'uploaded_image_name': unique_filename, 'pendency_image_name': pendency.image.name})
+                    results.append({'tid': pendency.tid, 'pid':pendency.pid, 'similarity': similarity, 'uploaded_image_name': unique_filename, 'pendency_image_name': pendency.image.name})
 
                 print(f"Search Results: {results}")
                 results.sort(key=lambda x: x['similarity'], reverse=True)
@@ -413,6 +459,8 @@ def get_brands_for_vertical(request):
 
     return JsonResponse({'error': 'Invalid request'})
 
+
+
 def results_view(request):
     return render(request, 'results.html')
 
@@ -425,8 +473,21 @@ def get_details(request, tid):
         'brand': pendency.brand,
         'vertical': pendency.vertical,
         'image_url': os.path.join(settings.MEDIA_URL, pendency.image.name),
+        "pid": pendency.pid
     }
     return JsonResponse(details_data, encoder=DjangoJSONEncoder)
+
+
+def download_pendencies(request):
+    queryset = Pendency.objects.all()
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="pendencies.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Vertical', 'Brand', 'PID', 'TID' , "Keywords"])
+    for pendency in queryset:
+        writer.writerow([pendency.vertical, pendency.brand, pendency.pid, pendency.tid , pendency.keywords])
+    return response
 
 
 # login_flo()

@@ -14,8 +14,9 @@ urlpatterns = [
     path('search' , views.search_view , name='search'),
     path('get_brands_for_vertical/', views.get_brands_for_vertical, name='get_brands_for_vertical'),
     path('results/', views.results_view, name='results'),
-    path('get_details/<str:tid>/', views.get_details, name='get_details')
-
+    path('get_details/<str:tid>/', views.get_details, name='get_details'),
+    path('profile' , views.profile , name="profile"),
+    path('download_pendencies' , views.download_pendencies , name="download_pendencies")
 ]
 
 
