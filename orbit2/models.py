@@ -28,4 +28,13 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} Profile"
+    
 
+class physicalOrphan(models.Model):
+    oid = models.CharField(max_length=255)
+    tid = models.OneToOneField(Pendency , on_delete=models.CASCADE , default=None , blank=True)
+    reconcilled = models.BooleanField(default=False)
+    def __str__(self):
+        return self.tid
+
+    

@@ -490,6 +490,11 @@ def download_pendencies(request):
     return response
 
 
+def oid_generator():
+    now = int(time.time())
+    oid = f"COS_YKB_{now}"
+    return oid
+
 # login_flo()
 # select_facility()
 # session_cookie = driver.get_cookies()

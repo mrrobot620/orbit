@@ -57,27 +57,35 @@
 
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="text-center mb-3">Orphan Reconcillation</h1>
-        <form method="POST" action="{% url 'search' %}" enctype="multipart/form-data" id="searchForm">
-            {% csrf_token %}            
-            <div class="mb-4 d-flex justify-content-center">
-                <img id="selectedImage" src="https://mdbootstrap.com/img/Photos/Others/placeholder.jpg"
-                     alt="example placeholder" style="width: 300px;" />
-            </div>
-
-            <div class="mb-3">
-                <label for="image" class="form-label">Select Image:</label>
-                <input type="file" class="form-control" name="image" accept="image/*" onchange="displaySelectedImage(event, 'selectedImage')" required>
-            </div>
-            <div class="form-group">
-                <label for="vertical">Vertical</label>
-                <select class="form-control" name="vertical" id="verticalSelect" placeholder="Select Vertical" multiple >
-                    {% for vertical in unique_verticals %}
-                        <option value="{{ vertical.vertical }}">{{ vertical.vertical }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+    <body>
+        <div class="container mt-5">
+            <h1 class="text-center mb-3">Orphan Reconciliation</h1>
+            <form method="POST" action="{% url 'search' %}" enctype="multipart/form-data" id="searchForm">
+                {% csrf_token %}            
+                <div class="mb-4 d-flex justify-content-center">
+                    <div id="imageContainer">
+                        <img id="selectedImage" src="https://mdbootstrap.com/img/Photos/Others/placeholder.jpg"
+                             alt="example placeholder" style="width: 300px;" />
+                    </div>
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label for="image" class="form-label">Select Image:</label>
+                    <input type="file" class="form-control" name="image" accept="image/*" onchange="displaySelectedImage(event, 'selectedImage')" required>
+                </div>
+    
+                <!-- Add a button to toggle between image and live camera -->
+                <button type="button" class="btn btn-secondary mb-3 mt-3" onclick="toggleCamera()">Use Live Camera</button>
+    
+                <div class="form-group">
+                    <label for="vertical">Vertical</label>
+                    <select class="form-control" name="vertical" id="verticalSelect" placeholder="Select Vertical" multiple>
+                        {% for vertical in unique_verticals %}
+                            <option value="{{ vertical.vertical }}">{{ vertical.vertical }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
             <!-- <div class="form-group">
                 <label for="brand">Keyword</label>
@@ -196,6 +204,21 @@
             reader.readAsDataURL(fileInput.files[0]);
         }
     }
+
+    function toggleCamera() {
+            var imageContainer = document.getElementById('imageContainer');
+            var cameraContainer = document.getElementById('cameraContainer');
+
+            if (imageContainer.style.display === 'block') {
+                imageContainer.style.display = 'none';
+                cameraContainer.style.display = 'block';
+            } else {
+                imageContainer.style.display = 'block';
+                cameraContainer.style.display = 'none';
+            }
+        }
+
+
     </script>
 </body>
 

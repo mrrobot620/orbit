@@ -96,9 +96,8 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="detailsModalLabel">Details</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <!-- how to make this button to close the modal ? -->
             </div>
             <div class="modal-body">
                 <div class="row">
@@ -108,10 +107,16 @@
                 </div>
                 <hr>
                 <p><strong>TID:</strong> <span id="modalTID"></span></p>
-                <p><strong>TID:</strong> <span id="modalPID"></span></p>
+                <p><strong>PID:</strong> <span id="modalPID"></span></p>
                 <p><strong>Description:</strong> <span id="modalDescription"></span></p>
                 <p><strong>Color:</strong> <span id="modalColor"></span></p>
                 <p><strong>Brand:</strong> <span id="modalBrand"></span></p>
+
+
+                <div class="grid">
+                    <button class="btn btn-primary btn-lg">Reconcile Now</button>
+                    <button class="btn btn-primary btn-lg"> Add Orphan </button>
+                </div>
                 <!-- Add more details as needed -->
             </div>
         </div>
