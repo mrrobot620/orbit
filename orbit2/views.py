@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.db import IntegrityError
 from django.core.serializers.json import DjangoJSONEncoder
 import json
+from base64 import b64decode 
 import csv
 import os
 from io import BytesIO
@@ -61,7 +62,7 @@ from bs4 import BeautifulSoup
 from requests_html import HTMLSession
 import threading
 import re
-from .models import Pendency
+from .models import Pendency , SearchHistory , ReconciliationRecord
 import cv2
 
 
@@ -98,7 +99,7 @@ def preprocess_image(img_path):
         if img is not None and np.prod(img.shape).astype(int) > 0:  # Ensure total number of elements is greater than 0
             img = cv2.resize(img, (224, 224))  # resize the image to (224, 224)
             img = tf.keras.applications.vgg16.preprocess_input(img)
-            img = np.expand_dims(img, axis=0)  # Add a batch dimension
+            img = np.expand_dims(img, axis=0)  
             return img
         else:
             print(f"Warning: Image not loaded or empty at {img_path}")
@@ -328,7 +329,6 @@ def download_tracking_page(id):
                         existing_product = Pendency.objects.get(tid=id)
                         print(f"Product with Tid {id} already exists in the database, skipping...")
                     except Pendency.DoesNotExist:
-                        # The product does not exist, proceed with creating a new one
                         try:
                             product = Pendency.objects.create(
                                 description=result_data.get('description', ''),
@@ -354,12 +354,10 @@ def download_tracking_page(id):
                             print(f"Error saving product to the database: {e}")
                 else:
                     print(f"ID {id} already uploaded, skipping...")
-
             except Exception as e:
                 print(f"Error in running API: {e}")
         else:
             print(f"Unable to find Pid for Tid {id}")
-        # Retry if not successful and not the last attempt
         if attempt < max_retries - 1:
             print(f"Retrying download for Tid {id}, attempt {attempt + 2}")
         else:
@@ -382,24 +380,45 @@ def search_view(request):
         uploaded_image = request.FILES.get('image')
         vertical = request.POST.getlist("vertical")
         keywords = request.POST.getlist("keywords")
- 
+
+        query_keywords = keywords[0].split(",")
 
         if not (uploaded_image and (brand or vertical)):
+            print(f"Vertical: {vertical}, Brand: {brand} , Keywords:  {query_keywords} , image: {uploaded_image}")
             return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'error_message': 'Invalid input'})
+        
 
         queryset = Pendency.objects.all()
         if vertical:
             queryset = queryset.filter(vertical__in=vertical)
         if brand:
             queryset = queryset.filter(brand=brand)
-       
         
+        keyword_queryset = keyword_query(query_keywords)
+
+        if keyword_query is not None:
+            queryset = queryset.filter(pk__in=keyword_queryset.values_list('pk', flat=True))
+
             
-        print(f"Vertical: {vertical}, Brand: {brand} , Keywords:  {keywords}")
+        print(f"Vertical: {vertical}, Brand: {brand} , Keywords:  {query_keywords}")
 
         unique_brands = Pendency.objects.filter(vertical=vertical).values('brand').distinct()
         if uploaded_image:
             uploaded_image_path, unique_filename = handle_uploaded_image(uploaded_image)
+
+            search_uuid = uuid.uuid4()
+
+            if request.user.is_authenticated:
+                user = request.user
+                search_parameters = {
+                    'brand': brand,
+                    'vertical': vertical,
+                    'keywords': query_keywords,
+                    }
+                
+                search_history_entry = SearchHistory.objects.create(user=user,  reconciled=False, query=search_parameters , filename=unique_filename , uuid =search_uuid)
+               
+
 
             print(f"Uploaded Image Path: {uploaded_image_path}")
 
@@ -407,6 +426,7 @@ def search_view(request):
                 return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands, 'error_message': 'Uploaded Image File Does Not Exist!'})
             try:
                 print(f"Queryset before loop: {queryset}")
+                print(f"Count of elements in queryset: {queryset.count()}")
                 for pendency in queryset:
                     print(f"Processing pendency: {pendency}")
                     pendency_image_path = pendency.image.path
@@ -415,19 +435,29 @@ def search_view(request):
                         continue
                     similarity = find_similar_images(uploaded_image_path, pendency_image_path)
                     print(f"Similarity for TID {pendency.tid}: {similarity}")
-                    results.append({'tid': pendency.tid, 'pid':pendency.pid, 'similarity': similarity, 'uploaded_image_name': unique_filename, 'pendency_image_name': pendency.image.name})
+                    results.append({'tid': pendency.tid, 'pid':pendency.pid, 'similarity': similarity, 'uploaded_image_name': unique_filename, 'pendency_image_name': pendency.image.name ,  "uuid":search_uuid})
 
                 print(f"Search Results: {results}")
                 results.sort(key=lambda x: x['similarity'], reverse=True)
 
                 # Redirect to the results page with the search results
-                return render(request, 'results.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands})
+                return render(request, 'results.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands ,  "uuid":search_uuid})
 
             except Exception as e:
                 print(f"Error processing image: {e}")
                 return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands, 'error_message': 'Error processing image'})
 
     return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'error_message': 'No Results Found!'})
+
+def keyword_query(keywords):
+    q_objects = [Q(keywords__icontains=keyword) for keyword in keywords]
+
+    query = Q()
+    for q_obj in q_objects:
+        print(f"Tid {q_obj}")
+        query |= q_obj
+
+    return Pendency.objects.filter(query)
 
 def handle_uploaded_image(uploaded_image):
     unique_filename = f"{uuid.uuid4().hex[:10]}.jpg"
@@ -446,6 +476,7 @@ def handle_uploaded_image(uploaded_image):
         print(f"Error saving image: {e}")
         return None
     
+
 def get_brands_for_vertical(request):
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' and request.method == 'GET':
         vertical_param = request.GET.get('vertical', None)
@@ -458,8 +489,6 @@ def get_brands_for_vertical(request):
             return JsonResponse({'brands': brands_list})
 
     return JsonResponse({'error': 'Invalid request'})
-
-
 
 def results_view(request):
     return render(request, 'results.html')
@@ -480,15 +509,39 @@ def get_details(request, tid):
 
 def download_pendencies(request):
     queryset = Pendency.objects.all()
-
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="pendencies.csv"'
     writer = csv.writer(response)
-    writer.writerow(['Vertical', 'Brand', 'PID', 'TID' , "Keywords"])
+    writer.writerow(['Vertical', 'Brand', 'PID', 'TID' , 'color',  "Keywords"])
     for pendency in queryset:
-        writer.writerow([pendency.vertical, pendency.brand, pendency.pid, pendency.tid , pendency.keywords])
+        writer.writerow([pendency.vertical, pendency.brand, pendency.pid, pendency.tid , pendency.color ,  pendency.keywords])
     return response
 
+
+def oid_generator():
+    now = int(time.time())
+    oid = f"COS_YKB_{now}"
+    return oid
+
+
+def reconcile_search_history(request):
+    if request.method == 'POST':
+        uuid = request.POST.get('uuid')
+
+        search_history = get_object_or_404(SearchHistory, user=request.user, uuid=uuid, reconciled=False)
+        search_history.reconciled = True
+        search_history.save()
+
+        tid = request.POST.get('tid')
+        pendency_instance = get_object_or_404(Pendency, tid=tid)
+        pendency_instance.delete()
+
+        reconciliation_record = ReconciliationRecord(user=request.user, tid=tid)
+        reconciliation_record.save()
+
+
+        return redirect('search')
+    return HttpResponse("Invalid request.")
 
 # login_flo()
 # select_facility()

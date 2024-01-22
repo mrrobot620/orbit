@@ -96,9 +96,6 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="detailsModalLabel">Details</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
             </div>
             <div class="modal-body">
                 <div class="row">
@@ -108,10 +105,19 @@
                 </div>
                 <hr>
                 <p><strong>TID:</strong> <span id="modalTID"></span></p>
-                <p><strong>TID:</strong> <span id="modalPID"></span></p>
+                <p><strong>PID:</strong> <span id="modalPID"></span></p>
                 <p><strong>Description:</strong> <span id="modalDescription"></span></p>
                 <p><strong>Color:</strong> <span id="modalColor"></span></p>
                 <p><strong>Brand:</strong> <span id="modalBrand"></span></p>
+
+                <form method="post" action="{% url 'reconcile_search_history' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="uuid" value="{{ uuid }}">
+                    <input type="hidden" id="reconcileTID" name="tid" value="">
+                    <button class="btn btn-primary" type="submit">Reconcile</button>
+                </form>
+
+
                 <!-- Add more details as needed -->
             </div>
         </div>
@@ -126,6 +132,9 @@
         $(document).ready(function () {
             // Function to show details in the modal
             function showDetails(tid) {
+                // Set the TID value in the hidden input field
+                $('#reconcileTID').val(tid);
+    
                 // Fetch details using AJAX (replace '/get_details/' with your actual URL)
                 $.ajax({
                     url: `/get_details/${tid}`,
@@ -158,10 +167,31 @@
             $('#detailsModal').on('hidden.bs.modal', function () {
                 // Reset the modal content when hidden
                 $(' #pendencyImage, #modalTID, #modalDescription, #modalColor, #modalBrand').empty();
+                // Clear the TID value in the hidden input field
+                $('#reconcileTID').val('');
+            });
+    
+            // Reconciliation button click
+            $('#detailsModal').on('click', '.btn-reconcile-now', function () {
+                const tid = $('#reconcileTID').val();
+                const uuid = YOUR_UUID_VARIABLE;  // Replace YOUR_UUID_VARIABLE with the actual UUID
+    
+                // Make AJAX request for reconciliation
+                $.ajax({
+                    url: `/reconcile_orphan/${tid}`,
+                    method: 'POST',
+                    data: { uuid: uuid },  // Pass the UUID as part of the data
+                    success: function (data) {
+                        console.log('Reconciliation successful:', data);
+                        $('#detailsModal').modal('hide');
+                    },
+                    error: function (error) {
+                        console.error('Error during reconciliation:', error);
+                    }
+                });
             });
         });
     </script>
-    
 
 </body>
 

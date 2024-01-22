@@ -28,4 +28,36 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} Profile"
+    
+
+class physicalOrphan(models.Model):
+    oid = models.CharField(max_length=255)
+    tid = models.OneToOneField(Pendency , on_delete=models.CASCADE , default=None , blank=True)
+    image = models.ImageField(upload_to='orphan_images/', blank=True, null=True)
+    def __str__(self):
+        return self.tid
+
+class SearchHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    query = models.CharField(max_length=255)
+    filename = models.CharField(max_length=255 ,  blank=True, null=True)
+    uuid = models.CharField(editable=False, unique=True , max_length=255 , blank=True , null=True)
+    reconciled = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.query}"
+
+    class Meta:
+        ordering = ['-timestamp']
+
+class ReconciliationRecord(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    tid = models.CharField(max_length=255)
+    reconciled_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} reconciled TID {self.tid} at {self.reconciled_at}"
+
+
 
