@@ -16,7 +16,8 @@ urlpatterns = [
     path('results/', views.results_view, name='results'),
     path('get_details/<str:tid>/', views.get_details, name='get_details'),
     path('profile' , views.profile , name="profile"),
-    path('download_pendencies' , views.download_pendencies , name="download_pendencies")
+    path('download_pendencies' , views.download_pendencies , name="download_pendencies"),
+     path('reconcile_search_history/', views.reconcile_search_history, name='reconcile_search_history')
 ]
 
 
