@@ -419,7 +419,6 @@ def search_view(request):
                 search_history_entry = SearchHistory.objects.create(user=user,  reconciled=False, query=search_parameters , filename=unique_filename , uuid =search_uuid)
                
 
-
             print(f"Uploaded Image Path: {uploaded_image_path}")
 
             if not os.path.exists(uploaded_image_path):
@@ -538,7 +537,6 @@ def reconcile_search_history(request):
 
         reconciliation_record = ReconciliationRecord(user=request.user, tid=tid)
         reconciliation_record.save()
-
 
         return redirect('search')
     return HttpResponse("Invalid request.")
