@@ -28,3 +28,6 @@ node_modules/
 # Ignore package-lock files
 package-lock.json
 yarn.lock
+
+
+/Users/abhishekrajput/Desktop/orbit/media

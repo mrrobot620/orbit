@@ -58,12 +58,14 @@ from datetime import datetime, timedelta
 import logging
 import shutil
 import requests
-from bs4 import BeautifulSoup
 from requests_html import HTMLSession
 import threading
 import re
 from .models import Pendency , SearchHistory , ReconciliationRecord
 import cv2
+
+
+tf.config.threading.set_inter_op_parallelism_threads(10)
 
 
 op = webdriver.ChromeOptions()
@@ -370,7 +372,6 @@ def open_new_tab():
     driver.execute_script("window.open('', '_blank');")
     driver.switch_to.window(driver.window_handles[-1])
 
-@csrf_exempt
 def search_view(request):
     results = []
     unique_verticals = Pendency.objects.values('vertical').distinct()
@@ -386,7 +387,6 @@ def search_view(request):
         if not (uploaded_image and (brand or vertical)):
             print(f"Vertical: {vertical}, Brand: {brand} , Keywords:  {query_keywords} , image: {uploaded_image}")
             return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'error_message': 'Invalid input'})
-        
 
         queryset = Pendency.objects.all()
         if vertical:
@@ -398,14 +398,13 @@ def search_view(request):
 
         if keyword_query is not None:
             queryset = queryset.filter(pk__in=keyword_queryset.values_list('pk', flat=True))
-
             
         print(f"Vertical: {vertical}, Brand: {brand} , Keywords:  {query_keywords}")
 
         unique_brands = Pendency.objects.filter(vertical=vertical).values('brand').distinct()
+
         if uploaded_image:
             uploaded_image_path, unique_filename = handle_uploaded_image(uploaded_image)
-
             search_uuid = uuid.uuid4()
 
             if request.user.is_authenticated:
@@ -416,31 +415,23 @@ def search_view(request):
                     'keywords': query_keywords,
                     }
                 
-                search_history_entry = SearchHistory.objects.create(user=user,  reconciled=False, query=search_parameters , filename=unique_filename , uuid =search_uuid)
-               
-
+                search_history_entry = SearchHistory.objects.create(user=user, reconciled=False, query=search_parameters , filename=unique_filename , uuid =search_uuid)
 
             print(f"Uploaded Image Path: {uploaded_image_path}")
 
             if not os.path.exists(uploaded_image_path):
                 return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands, 'error_message': 'Uploaded Image File Does Not Exist!'})
+            
             try:
-                print(f"Queryset before loop: {queryset}")
-                print(f"Count of elements in queryset: {queryset.count()}")
+                threads = []
                 for pendency in queryset:
-                    print(f"Processing pendency: {pendency}")
-                    pendency_image_path = pendency.image.path
-                    if not os.path.exists(pendency_image_path):
-                        print(f"Skipping pendency {pendency.tid} due to missing image file.")
-                        continue
-                    similarity = find_similar_images(uploaded_image_path, pendency_image_path)
-                    print(f"Similarity for TID {pendency.tid}: {similarity}")
-                    results.append({'tid': pendency.tid, 'pid':pendency.pid, 'similarity': similarity, 'uploaded_image_name': unique_filename, 'pendency_image_name': pendency.image.name ,  "uuid":search_uuid})
+                    thread = threading.Thread(target=process_image, args=(uploaded_image_path, pendency, results, unique_filename, search_uuid))
+                    threads.append(thread)
+                    thread.start()
+                for thread in threads:
+                    thread.join()
 
-                print(f"Search Results: {results}")
                 results.sort(key=lambda x: x['similarity'], reverse=True)
-
-                # Redirect to the results page with the search results
                 return render(request, 'results.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands ,  "uuid":search_uuid})
 
             except Exception as e:
@@ -448,6 +439,17 @@ def search_view(request):
                 return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'unique_brands': unique_brands, 'error_message': 'Error processing image'})
 
     return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'error_message': 'No Results Found!'})
+
+def process_image(uploaded_image_path, pendency, results, unique_filename, search_uuid):
+    pendency_image_path = pendency.image.path
+    if not os.path.exists(pendency_image_path):
+        print(f"Skipping pendency {pendency.tid} due to missing image file.")
+        return
+
+    similarity = find_similar_images(uploaded_image_path, pendency_image_path)
+    print(f"Similarity for TID {pendency.tid}: {similarity}")
+    results.append({'tid': pendency.tid, 'pid':pendency.pid, 'similarity': similarity, 'uploaded_image_name': unique_filename, 'pendency_image_name': pendency.image.name ,  "uuid":search_uuid})
+
 
 def keyword_query(keywords):
     q_objects = [Q(keywords__icontains=keyword) for keyword in keywords]
@@ -517,10 +519,9 @@ def download_pendencies(request):
         writer.writerow([pendency.vertical, pendency.brand, pendency.pid, pendency.tid , pendency.color ,  pendency.keywords])
     return response
 
-
 def oid_generator():
-    now = int(time.time())
-    oid = f"COS_YKB_{now}"
+    linux_time_now = int(time.time())
+    oid = f"YKB_COS_{linux_time_now}"
     return oid
 
 
@@ -539,9 +540,9 @@ def reconcile_search_history(request):
         reconciliation_record = ReconciliationRecord(user=request.user, tid=tid)
         reconciliation_record.save()
 
-
         return redirect('search')
     return HttpResponse("Invalid request.")
+
 
 # login_flo()
 # select_facility()
