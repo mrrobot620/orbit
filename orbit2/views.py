@@ -63,6 +63,7 @@ import threading
 import re
 from .models import Pendency , SearchHistory , ReconciliationRecord
 import cv2
+import io
 
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -99,8 +100,8 @@ session.mount("https://", adapter)
 def preprocess_image(img_path):
     try:
         img = cv2.imread(img_path)
-        if img is not None and np.prod(img.shape).astype(int) > 0:  # Ensure total number of elements is greater than 0
-            img = cv2.resize(img, (224, 224))  # resize the image to (224, 224)
+        if img is not None and np.prod(img.shape).astype(int) > 0:
+            img = cv2.resize(img, (224, 224))
             img = tf.keras.applications.vgg16.preprocess_input(img)
             img = np.expand_dims(img, axis=0)  
             return img
@@ -147,7 +148,6 @@ def login_view(request):
         username = request.POST['username']
         password = request.POST['password']
         user = authenticate(request , username=username , password=password)
-        print(username , password)
         if user is not None:
             login(request , user)
             return redirect('home')
@@ -376,7 +376,10 @@ def search_view(request):
     results = []
     unique_verticals = Pendency.objects.values('vertical').distinct()
 
+
     if request.method == 'POST':
+        lens_pids = extract_pid()
+        print(lens_pids)
         brand = request.POST.get('brand')
         uploaded_image = request.FILES.get('image')
         vertical = request.POST.getlist("vertical")
@@ -389,6 +392,22 @@ def search_view(request):
             return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'error_message': 'Invalid input'})
 
         queryset = Pendency.objects.all()
+
+        # added this to fast forward the search , if pids matches from the result of google search
+
+        if lens_pids is not None:
+            matching_pids = queryset.filter(pid__in=lens_pids).values_list('pid', flat=True)
+            if matching_pids:
+                if uploaded_image:
+                    uploaded_image_path, unique_filename = handle_uploaded_image(uploaded_image)
+                queryset = queryset.filter(pid__in=matching_pids)
+                results = [{'tid': pendency.tid, 'pid': pendency.pid} for pendency in queryset]
+                results.append({'similarity': "100", 'uploaded_image_name': unique_filename})
+                return render(request, 'results.html', {'results': results, 'unique_verticals': unique_verticals})
+            else:
+                print("Lens Pid Failed")
+                pass
+
         if vertical:
             queryset = queryset.filter(vertical__in=vertical)
         if brand:
@@ -495,6 +514,9 @@ def get_brands_for_vertical(request):
 def results_view(request):
     return render(request, 'results.html')
 
+def db_view(request):
+    return render(request , 'database.html')
+
 def get_details(request, tid):
     pendency = get_object_or_404(Pendency, tid=tid)
     details_data = {
@@ -543,6 +565,63 @@ def reconcile_search_history(request):
         return redirect('search')
     return HttpResponse("Invalid request.")
 
+@csrf_exempt
+def upload_image_to_aws(request):
+    try:
+        uploaded_image = request.FILES['image']
+        img = Image.open(uploaded_image)
+        if img.format == 'PNG':
+            converted_image_io = io.BytesIO()
+            img = img.convert('RGB')
+            max_size = (800, 600)
+            img.thumbnail(max_size)
+            img.save(converted_image_io, format='JPEG', quality=70)
+            converted_image_io.seek(0)
+            image_data = converted_image_io
+        else:
+            max_size = (800, 600)
+            img.thumbnail(max_size)
+            image_data = io.BytesIO()
+            img.save(image_data, format='JPEG', quality=70)
+            image_data.seek(0)
+        
+        files = {'image': ('a.jpg', image_data)}
+    
+        upload_url = 'http://65.2.153.92:8000/upload_image/'
+
+        response = requests.post(upload_url, files=files)
+        
+        if response.status_code == 200:
+            google_pids = extract_pid()
+            return HttpResponse(f"Image uploaded successfully!  {str(google_pids)}" )
+        else:
+            return HttpResponse(f"Failed to upload image. Status code: {response.status_code}", status=500)
+    except KeyError:
+        return HttpResponse("No image file found in the request.", status=400)
+    except Exception as e:
+        return HttpResponse(f"Error uploading image: {str(e)}", status=500)
+
+
+def extract_pid():
+    start_time = time.time()
+    url = "https://lens.google.com/uploadbyurl?url=http://65.2.153.92:8000/images/a.jpg/"
+    driver.get(url)
+    links = [link.get_attribute('href') for link in driver.find_elements(By.TAG_NAME , "a")]
+    filtered_links = [link for link in links if link.startswith("https://www.flipkart.com/")]
+    pattern = r'pid=([A-Za-z0-9]+)&'
+    pid_matches = []
+    while not pid_matches and time.time() - start_time < 10:
+        pid_matches = []
+        [pid_matches.extend(re.findall(pattern , link)for link in filtered_links)]
+        pid_matches = [pid for sublist in pid_matches for pid in sublist]
+        if not pid_matches:
+            time.sleep(1) 
+    if not pid_matches:
+        print("PID extraction timed out.")
+        return None
+    else:
+        print(pid_matches)
+        return pid_matches
 
 # login_flo()
 # select_facility()

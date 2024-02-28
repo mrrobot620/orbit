@@ -260,113 +260,116 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/bootstrap.tagsinput/0.8.0/bootstrap-tagsinput.min.js"></script>
 
-    <script>
-        $(document).ready(function () {
-            $('#verticalSelect').select2({
-                theme: 'bootstrap-5',
-                placeholder: "Select Vertical",
-                closeOnSelect: false,
-            });
+  <script>
+    $(document).ready(function () {
+    $('#verticalSelect').select2({
+        theme: 'bootstrap-5',
+        placeholder: "Select Vertical",
+        closeOnSelect: false,
+    });
 
-            $('#brandSelect').select2({
-                theme: 'bootstrap-5',
-                placeholder: "Select ",
-                closeOnSelect: false,
-            });
+    $('#brandSelect').select2({
+        theme: 'bootstrap-5',
+        placeholder: "Select ",
+        closeOnSelect: false,
+    });
 
-            $('#verticalSelect').change(function () {
-                var selectedVertical = $(this).val();
-                if (selectedVertical) {
-                    $('#brandSelect').prop('disabled', false);
-                    $.ajax({
-                        url: '{% url "get_brands_for_vertical" %}',
-                        data: {
-                            'vertical': selectedVertical.join(',')
-                        },
-                        dataType: 'json',
-                        success: function (data) {
-                            $('#brandSelect').empty();
-                            $('#brandSelect').append($('<option>', {
-                                value: '',
-                                text: 'Generic Brand'
-                            }));
-                            $.each(data.brands, function (index, brand) {
-                                $('#brandSelect').append($('<option>', {
-                                    value: brand,
-                                    text: brand
-                                }));
-                            });
-                        },
-                        error: function (error) {
-                            console.log(error);
-                        }
+    $('#verticalSelect').change(function () {
+        var selectedVertical = $(this).val();
+        if (selectedVertical) {
+            $('#brandSelect').prop('disabled', false);
+            $.ajax({
+                url: '{% url "get_brands_for_vertical" %}',
+                data: {
+                    'vertical': selectedVertical.join(',')
+                },
+                dataType: 'json',
+                success: function (data) {
+                    $('#brandSelect').empty();
+                    $('#brandSelect').append($('<option>', {
+                        value: '',
+                        text: 'Generic Brand'
+                    }));
+                    $.each(data.brands, function (index, brand) {
+                        $('#brandSelect').append($('<option>', {
+                            value: brand,
+                            text: brand
+                        }));
                     });
-                } else {
-                    $('#brandSelect').prop('disabled', true);
-                    $('#brandSelect').val('').change();
+                },
+                error: function (error) {
+                    console.log(error);
                 }
             });
-
-            $('#searchForm').submit(function () {
-                var selectedBrand = $('#brandSelect').val();
-
-                if (selectedBrand === '__generic__') {
-                    // Handle generic brand case
-                }
-            });
-
-            $('#searchButton').click(function () {
-                $('#loaderContainer').show();
-            });
-         
-
-            $('#keywords').tagsinput();
-
-            function displaySelectedImage(event, elementId) {
-                const selectedImage = document.getElementById(elementId);
-                const fileInput = event.target;
-
-                if (fileInput.files && fileInput.files[0]) {
-                    const reader = new FileReader();
-
-                    reader.onload = function (e) {
-                        selectedImage.src = e.target.result;
-                    };
-
-                    reader.readAsDataURL(fileInput.files[0]);
-                }
-            }
-        });
-
-        $('#searchForm').submit(function () {
-            // Show the animation before form submission
-            $('#animationWrapper').show();
-        });
-
-        $('#searchButton').click(function () {
-            // Toggle the visibility of the animation element
-            $('#animationWrapper').toggle();
-
-            // Continue with the form submission
-            $('#searchForm').submit();
-        });
-
-        function displaySelectedImage(event, elementId) {
-            const selectedImage = document.getElementById(elementId);
-            const fileInput = event.target;
-
-            if (fileInput.files && fileInput.files[0]) {
-                const reader = new FileReader();
-
-                reader.onload = function (e) {
-                    selectedImage.src = e.target.result;
-                };
-
-                reader.readAsDataURL(fileInput.files[0]);
-            }
+        } else {
+            $('#brandSelect').prop('disabled', true);
+            $('#brandSelect').val('').change();
         }
+    });
+
+    $('#searchForm').submit(function () {
+        // Show the animation before form submission
+        $('#animationWrapper').show();
+    });
+
+    $('#searchButton').click(function () {
+        // Toggle the visibility of the animation element
+        $('#animationWrapper').toggle();
+
+        // Continue with the form submission
+        $('#searchForm').submit();
+    });
+
+    $('#keywords').tagsinput();
+
+    $('#image').change(function (event) {
+        // Call the displaySelectedImage function to display the selected image
+        displaySelectedImage(event, 'selectedImage');
+
+        // Upload the selected image to the server
+        uploadImageToServer(event.target.files[0]);
+    });
+});
+
+function displaySelectedImage(event, elementId) {
+    const selectedImage = document.getElementById(elementId);
+    const fileInput = event.target;
+
+    if (fileInput.files && fileInput.files[0]) {
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+            selectedImage.src = e.target.result;
+        };
+
+        reader.readAsDataURL(fileInput.files[0]);
+    }
+}
+
+function uploadImageToServer(imageFile) {
+    // Create FormData object and append the image file
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    // Send POST request to the Django view function
+    $.ajax({
+        url: '{% url "upload_image_to_aws" %}',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function (response) {
+            console.log('Image uploaded successfully!');
+        },
+        error: function (xhr, status, error) {
+            console.error('Failed to upload image. Status code:', xhr.status);
+        }
+    });
+}
+  </script>
+
       
-    </script>
+
 
 <script defer>
       function toggleCamera() {

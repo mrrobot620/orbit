@@ -17,7 +17,10 @@ urlpatterns = [
     path('get_details/<str:tid>/', views.get_details, name='get_details'),
     path('profile' , views.profile , name="profile"),
     path('download_pendencies' , views.download_pendencies , name="download_pendencies"),
-     path('reconcile_search_history/', views.reconcile_search_history, name='reconcile_search_history')
+    path('reconcile_search_history/', views.reconcile_search_history, name='reconcile_search_history'),
+    path('db/' , views.db_view , name="db"),
+    path("upload_image_to_aws/" , views.upload_image_to_aws , name="upload_image_to_aws")
+
 ]
 
 
