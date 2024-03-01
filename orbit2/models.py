@@ -11,7 +11,9 @@ class Pendency(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     image = models.ImageField(upload_to='product_images/', blank=True, null=True)
     pid = models.CharField(max_length=255)
+    itm_id = models.CharField(max_length=255)
     tid = models.CharField(max_length=255)
+
 
     def save(self, *args, **kwargs):
         self.name = self.tid
