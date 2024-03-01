@@ -78,7 +78,7 @@ prefs = {
     'directory_upgrade': True
 }
 op.add_experimental_option('prefs' , prefs)
-driver = webdriver.Chrome(options=op)
+driver = webdriver.Chrome(executable_path=r"C:\Users\abhishek.h1.FKIPL\Downloads\orbit-Prod\chromedriver.exe", options=op)
 
 inception_model = InceptionV3(weights='imagenet')
 model = tf.keras.applications.VGG16(
@@ -235,10 +235,10 @@ def login_flo():
     driver.get("http://10.24.2.16/fklshipping/")
     time.sleep(5)
     username = driver.find_element(By.XPATH , "/html/body/div[2]/div[2]/div/div/form/div/div[4]/input[1]")
-    username.send_keys("ca.2670054")
+    username.send_keys("ca.3008033")
 
     password = driver.find_element(By.XPATH , "/html/body/div[2]/div[2]/div/div/form/div/div[4]/input[2]")
-    password.send_keys("Chauhan@8091")
+    password.send_keys("Rv73pYLxgR")
     time.sleep(2)
     try:
         cross = driver.find_element(By.XPATH , "/html/body/div[4]/div/button")
@@ -312,6 +312,7 @@ def download_tracking_page(id):
                 api = requests.get(f"http://10.83.47.208/v2/product/xif0q/{pid}")
                 raw_api = api.json()
                 images_link = extract_images_info(raw_api)
+                itm_id = raw_api['data']['relationships']['ITEMIZATION']['DEFAULT'][0]['archaicId']
                 metadata = raw_api.get("metadata", {})
                 product_attributes1 = metadata.get("productAttributes", {})
                 vertical = product_attributes1.get("vertical", "")
@@ -321,6 +322,7 @@ def download_tracking_page(id):
                 brand_map = attribute_map.get("brand", {})
                 brand_name = brand_map.get("value", "")
                 keys_to_extract = ['description', 'color', 'weight', 'height', 'brand', 'keywords', 'price']
+
                 result_data = {}
                 for key in keys_to_extract:
                     value = attribute_map.get(key)
@@ -341,10 +343,11 @@ def download_tracking_page(id):
                                 price=result_data.get('price', 0.0),
                                 pid=pid,
                                 tid=id,
+                                itm_id=itm_id,
                                 vertical=vertical,
                                 image=f"{id}.jpg"
                             )
-                            uploaded_ids.append(id)  # Add the ID to the list after successful upload
+                            uploaded_ids.append(id) 
                             print(f"Product saved to the database: {product}")
                             if images_link:
                                 image_url = images_link[0].get('image_url')
@@ -392,17 +395,17 @@ def search_view(request):
             return render(request, 'search.html', {'results': results, 'unique_verticals': unique_verticals, 'error_message': 'Invalid input'})
 
         queryset = Pendency.objects.all()
-
         # added this to fast forward the search , if pids matches from the result of google search
-
         if lens_pids is not None:
-            matching_pids = queryset.filter(pid__in=lens_pids).values_list('pid', flat=True)
+            filter_condition = Q(pid__in=lens_pids) | Q(itm_id__in=lens_pids)
+            matching_pids = queryset.filter(filter_condition).values_list('pid', flat=True)
+            print(f"matching pids: ==  {matching_pids}")
             if matching_pids:
                 if uploaded_image:
                     uploaded_image_path, unique_filename = handle_uploaded_image(uploaded_image)
-                queryset = queryset.filter(pid__in=matching_pids)
-                results = [{'tid': pendency.tid, 'pid': pendency.pid} for pendency in queryset]
-                results.append({'similarity': "100", 'uploaded_image_name': unique_filename})
+                    queryset = queryset.filter(pid__in=matching_pids)
+                    print(f"Queryset == {queryset}")
+                    results = [{'tid': pendency.tid, 'pid': pendency.pid , 'pendency_image_name':pendency.image.name, 'similarity': "100", 'uploaded_image_name': unique_filename} for pendency in queryset]
                 return render(request, 'results.html', {'results': results, 'unique_verticals': unique_verticals})
             else:
                 print("Lens Pid Failed")
@@ -606,22 +609,24 @@ def extract_pid():
     start_time = time.time()
     url = "https://lens.google.com/uploadbyurl?url=http://65.2.153.92:8000/images/a.jpg/"
     driver.get(url)
-    links = [link.get_attribute('href') for link in driver.find_elements(By.TAG_NAME , "a")]
+    links = [link.get_attribute('href') for link in driver.find_elements(By.TAG_NAME, "a")]
     filtered_links = [link for link in links if link.startswith("https://www.flipkart.com/")]
     pattern = r'pid=([A-Za-z0-9]+)&'
+    pattern2 = r'itm([A-Za-z0-9]+)'
     pid_matches = []
-    while not pid_matches and time.time() - start_time < 10:
+    while not pid_matches and time.time() - start_time < 20:
         pid_matches = []
-        [pid_matches.extend(re.findall(pattern , link)for link in filtered_links)]
-        pid_matches = [pid for sublist in pid_matches for pid in sublist]
-        if not pid_matches:
-            time.sleep(1) 
+        for link in filtered_links:
+            pid_matches.extend(re.findall(pattern, link))
+            pid_matches.extend(["ITM" + match.upper() for match in re.findall(pattern2, link)])
     if not pid_matches:
         print("PID extraction timed out.")
         return None
     else:
         print(pid_matches)
         return pid_matches
+
+
 
 # login_flo()
 # select_facility()
